@@ -14,6 +14,12 @@ export const token = {
   clear: () => { accessToken = null },
 }
 
+const API_BASE = (
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
+  (typeof localStorage !== 'undefined' && localStorage.getItem('metro_api_url')) ||
+  ''
+).replace(/\/+$/, '')
+
 async function call(path, { method = 'GET', body, blob, formData } = {}) {
   let res
   try {
@@ -25,7 +31,7 @@ async function call(path, { method = 'GET', body, blob, formData } = {}) {
       headers['Authorization'] = 'Bearer ' + token.get()
     }
 
-    res = await fetch('/api' + path, {
+    res = await fetch(`${API_BASE}/api${path}`, {
       method,
       headers,
       body: formData ? formData : (body ? JSON.stringify(body) : undefined),

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -1138,6 +1139,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Metro Induction Planner", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(api)
 
 if STATIC_DIR.exists():

@@ -54,13 +54,37 @@ export default function Login({ onLogin }) {
             {error && <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
             <Btn className="w-full py-3" disabled={busy || !username || !password}>{busy ? 'Signing in…' : 'Sign in'} <span className="ml-2" aria-hidden="true">→</span></Btn>
           </form>
-          {import.meta.env.DEV && <div className="mt-8 border-t border-slate-200/80 pt-6">
+          <div className="mt-8 border-t border-slate-200/80 pt-6">
             <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Quick demo access</p>
             <div className="grid grid-cols-2 gap-3">
               <button type="button" onClick={() => fill('officer', 'officer123')} className="demo-access rounded-xl border border-slate-200/80 bg-white/80 p-3.5 text-left transition hover:border-orange-400 hover:shadow-md"><svg className="mb-2 size-4 text-orange-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 3 19 6v5c0 4.7-3 8-7 10-4-2-7-5.3-7-10V6l7-3Z"/><path d="m9 12 2 2 4-4"/></svg><span className="block text-sm font-bold">Depot Officer</span><span className="text-xs text-slate-500">Can approve plans</span></button>
               <button type="button" onClick={() => fill('viewer', 'viewer123')} className="demo-access rounded-xl border border-slate-200/80 bg-white/80 p-3.5 text-left transition hover:border-orange-400 hover:shadow-md"><svg className="mb-2 size-4 text-orange-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg><span className="block text-sm font-bold">Viewer</span><span className="text-xs text-slate-500">Read-only access</span></button>
             </div>
-          </div>}
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <span>Backend Server:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const current = (typeof localStorage !== 'undefined' && localStorage.getItem('metro_api_url')) || ''
+                  const nextUrl = window.prompt(
+                    'Enter your backend API URL (leave empty for same origin, or enter http://localhost:8000 for local backend):',
+                    current
+                  )
+                  if (nextUrl !== null) {
+                    if (nextUrl.trim()) {
+                      localStorage.setItem('metro_api_url', nextUrl.trim())
+                    } else {
+                      localStorage.removeItem('metro_api_url')
+                    }
+                    window.location.reload()
+                  }
+                }}
+                className="text-orange-600 hover:text-orange-700 font-medium underline"
+              >
+                {(typeof localStorage !== 'undefined' && localStorage.getItem('metro_api_url')) || 'Same Origin / Default'} ⚙️
+              </button>
+            </div>
+          </div>
         </div>
       </section>
     </main>
