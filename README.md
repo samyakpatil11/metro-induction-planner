@@ -88,28 +88,20 @@ daily logs (same table layout as in `db.py`) and the rest works unchanged.
 **Want to change the website?** Install Node.js, then in `frontend/` run `npm install`, and `npm run dev`
 (live preview on port 5173, with the backend running). `npm run build` updates the site in `backend/app/static`.
 
-## Deploy a public demo
+## Deployment with Firebase
 
-The project includes a Render Blueprint in `render.yaml`. It deploys the built frontend and FastAPI
-backend together, pins Python in `.python-version`, binds to the host-provided `PORT`, and requires
-PostgreSQL rather than writing production data to the service filesystem.
+You can host the React frontend on **Firebase Hosting** and run the FastAPI backend on **Google Cloud Run** (with Firebase Hosting rewrites to route `/api/**` to Cloud Run):
 
-1. Push this folder to a GitHub repository and create a Render Blueprint from that repository.
-2. Provide `DATABASE_URL` for a PostgreSQL database, plus a unique `METRO_ADMIN_USERNAME` and a
-   strong `METRO_ADMIN_PASSWORD` of at least 14 characters when Render prompts for them. The
-   Blueprint generates `METRO_SECRET` for you. Do not put these values in this file or commit them.
-3. The included Blueprint enables **demo mode**. The app will seed synthetic sample fleet data and
-   show a persistent warning that its plans do not represent live trains. The known local demo
-   accounts are removed and cannot be used on the hosted service.
-4. Keep the database URL, secret, and admin password private. Use a PostgreSQL provider whose plan
-   preserves data for the period you need; Render's free web service has an ephemeral filesystem,
-   and Render's free Postgres database expires after 30 days. See [Render free service limits](https://render.com/docs/free).
+1. **Frontend on Firebase Hosting**:
+   - Install Firebase CLI: `npm install -g firebase-tools`
+   - Run `firebase login` and `firebase init hosting`
+   - Set public directory to `frontend/dist` (or `backend/app/static`)
+   - Build frontend: `cd frontend && npm run build`
+   - Deploy: `firebase deploy --only hosting`
 
-This setup is suitable for a **demonstration with synthetic data**, not for dispatching trains.
-Before connecting real fleet records or using this for operations, deploy in a controlled environment,
-load and validate the real data, set `METRO_DEMO_MODE=false`, and complete an operational/security
-review. If production mode is selected with an empty database, startup intentionally fails rather
-than silently inventing fleet data.
+2. **Full-stack with Cloud Run**:
+   - Containerize or deploy the FastAPI backend to Cloud Run.
+   - Configure Firebase Hosting rewrites in `firebase.json` to proxy `/api/**` to Cloud Run.
 
 ---
 
