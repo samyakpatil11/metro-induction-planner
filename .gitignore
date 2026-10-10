@@ -22,3 +22,7 @@ backend/data/
 *.log
 ieee_review_render/
 /DESIGN.md
+
+# Firebase
+.firebase/
+
