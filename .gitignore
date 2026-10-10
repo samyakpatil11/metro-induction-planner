@@ -1,0 +1,24 @@
+# Local environments and generated files
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+
+# Local databases and credentials
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+!.env.example
+
+# Runtime logs and generated paper previews
+*.log
+ieee_review_render/
+/DESIGN.md
