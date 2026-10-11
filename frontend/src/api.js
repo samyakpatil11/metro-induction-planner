@@ -20,6 +20,27 @@ const API_BASE = (
   ''
 ).replace(/\/+$/, '')
 
+// How long before token expiry (in ms) to proactively refresh it.
+const REFRESH_BUFFER_MS = 30 * 60 * 1000 // 30 minutes
+let _refreshTimer = null
+
+/** Schedule a proactive token refresh 30 minutes before a 12-hour token expires. */
+export function scheduleTokenRefresh() {
+  clearTimeout(_refreshTimer)
+  // TOKEN_HOURS = 12, refresh at 11h30m
+  const refreshInMs = 11.5 * 60 * 60 * 1000
+  _refreshTimer = setTimeout(async () => {
+    if (!token.get()) return
+    try {
+      const data = await call('/refresh', { method: 'POST' })
+      token.set(data.token)
+      scheduleTokenRefresh() // reschedule
+    } catch {
+      // If refresh fails the next real API call will get a 401 and log the user out.
+    }
+  }, refreshInMs)
+}
+
 async function call(path, { method = 'GET', body, blob, formData } = {}) {
   let res
   try {
@@ -39,9 +60,12 @@ async function call(path, { method = 'GET', body, blob, formData } = {}) {
   } catch {
     throw new Error('Cannot reach the server. Is it running?')
   }
+  // Global 401 handler — any expired/invalid token fires a logout event
   if (res.status === 401 && path !== '/login') {
     token.clear()
+    clearTimeout(_refreshTimer)
     window.dispatchEvent(new Event('metro-logout'))
+    throw new Error('Your session has expired. Please log in again.')
   }
   if (!res.ok) {
     let msg = 'Something went wrong. Please try again.'
@@ -58,6 +82,7 @@ async function call(path, { method = 'GET', body, blob, formData } = {}) {
 export const api = {
   health: () => call('/health'),
   login: (username, password) => call('/login', { method: 'POST', body: { username, password } }),
+  refresh: () => call('/refresh', { method: 'POST' }),
   me: () => call('/me'),
   overview: () => call('/overview'),
   trains: () => call('/trains'),
@@ -104,6 +129,9 @@ export const api = {
   changeLog: (limit = 100, offset = 0, entity_type = null) =>
     call(`/changelog?limit=${limit}&offset=${offset}${entity_type ? `&entity_type=${entity_type}` : ''}`),
   resetSyntheticData: () => call('/reset-synthetic-data', { method: 'POST' }),
+
+  // Admin
+  closeDay: (kmAccrued = null) => call('/admin/close-day', { method: 'POST', body: { km_accrued: kmAccrued } }),
 
   // Standard Plan actions
   strategies: () => call('/strategies'),

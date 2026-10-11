@@ -21,10 +21,16 @@ def _env_bool(name: str, default: bool) -> bool:
     return normalized in {"1", "true", "yes", "on"}
 
 
+import logging as _logging
 _LOCAL_SECRET = "metro-local-development-secret-32bytes"
 SECRET = os.environ.get("METRO_SECRET", _LOCAL_SECRET)
 if IS_PRODUCTION and (len(SECRET) < 32 or SECRET == _LOCAL_SECRET):
     raise RuntimeError("Production requires a private METRO_SECRET with at least 32 characters.")
+if SECRET == _LOCAL_SECRET:
+    _logging.warning(
+        "[metro] Using the built-in development SECRET. JWT tokens are not secure. "
+        "Set METRO_SECRET in your environment before any real deployment."
+    )
 
 SIMULATION_MODE = _env_bool("METRO_DEMO_MODE", not IS_PRODUCTION)
 ADMIN_USERNAME = os.environ.get("METRO_ADMIN_USERNAME", "").strip().lower()
@@ -39,6 +45,7 @@ if IS_PRODUCTION:
         raise RuntimeError("Production METRO_ADMIN_PASSWORD must be at least 14 characters.")
 
 TOKEN_HOURS = 12
+SOLVER_TIMEOUT_SECONDS = 5  # moved from optimizer.py; change here to tune
 
 # ---- Fleet (Nagpur Metro, from the official timetable) -------------------
 FLEET_SIZE = 23

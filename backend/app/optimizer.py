@@ -264,7 +264,7 @@ def solve(rows, strategy=C.DEFAULT_STRATEGY, overrides=None, constraints=None, t
 
 
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 5
+    solver.parameters.max_time_in_seconds = C.SOLVER_TIMEOUT_SECONDS
     solver.parameters.random_seed = 42
     status = solver.Solve(m)
 

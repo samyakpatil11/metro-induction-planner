@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { api, token } from './api'
+import { api, token, scheduleTokenRefresh } from './api'
 import Login from './components/Login'
 import Overview from './components/Overview'
 import PlanPage from './components/PlanPage'
@@ -18,7 +18,7 @@ const TABS = [
 
 export default function App() {
   const [user, setUser] = useState(null)
-  const [booting, setBooting] = useState(false)
+  const [booting, setBooting] = useState(true)
   const [data, setData] = useState(null)
   const [tab, setTab] = useState('overview')
   const [openCode, setOpenCode] = useState(null)
@@ -48,12 +48,15 @@ export default function App() {
     setAuditLoading(true)
     try { setAudit(await api.audit()) } catch (e) { toast(e.message, 'error') }
     finally { setAuditLoading(false) }
-  }, [toast])
+  }, [toast])  // audit response is now {total, events:[...]}; ActivityPage handles both shapes
 
   // Validate a token only if this app instance already has one in memory.
   useEffect(() => {
-    if (!token.get()) return
-    api.me().then(setUser).catch(() => token.clear()).finally(() => setBooting(false))
+    if (!token.get()) { setBooting(false); return }
+    api.me()
+      .then((u) => { setUser(u); scheduleTokenRefresh() })
+      .catch(() => token.clear())
+      .finally(() => setBooting(false))
   }, [])
   useEffect(() => { if (user) refresh() }, [user, refresh])
   useEffect(() => { if (user && tab === 'activity') loadAudit() }, [user, tab, loadAudit])
@@ -69,7 +72,7 @@ export default function App() {
   }, [])
 
   if (booting) return <Spinner />
-  if (!user) return <Login onLogin={setUser} />
+  if (!user) return <Login onLogin={(u) => { setUser(u); scheduleTokenRefresh() }} />
 
   const isOfficer = user.role === 'officer'
   const logout = () => { token.clear(); setUser(null); setData(null); setTab('overview') }
@@ -168,7 +171,7 @@ export default function App() {
             {tab === 'plan' && <PlanPage plan={data.plan} strategies={data.strategies} trains={data.trains} isOfficer={isOfficer} refresh={refresh} openTrain={showTrain} toast={toast} />}
             {tab === 'trains' && <TrainsPage trains={data.trains} openTrain={showTrain} onExport={downloadFleet} />}
             {tab === 'admin' && <AdminDashboard trains={data.trains} onRefresh={refresh} toast={toast} isOfficer={isOfficer} onPlanCreated={() => { refresh(); setTab('plan'); }} />}
-            {tab === 'activity' && <ActivityPage entries={audit} loading={auditLoading} onRefresh={loadAudit} />}
+            {tab === 'activity' && <ActivityPage entries={audit?.events ?? audit ?? []} loading={auditLoading} onRefresh={loadAudit} total={audit?.total} />}
           </>
         )}
 
@@ -180,7 +183,7 @@ export default function App() {
   )
 }
 
-function ActivityPage({ entries, loading, onRefresh }) {
+function ActivityPage({ entries, loading, onRefresh, total }) {
   const humanize = (action) => action.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
   return <section className="page-enter space-y-4">
     <div className="flex flex-wrap items-end justify-between gap-3">
@@ -198,6 +201,6 @@ function ActivityPage({ entries, loading, onRefresh }) {
         </li>)}
       </ul> : <p className="p-8 text-center text-sm text-slate-500">No recorded activity yet. New plan and fault actions will appear here.</p>}
     </div>
-    <p className="text-xs text-slate-500">Showing the latest 100 events.</p>
+    <p className="text-xs text-slate-500">Showing latest 100 of {total ?? '…'} total events.</p>
   </section>
 }

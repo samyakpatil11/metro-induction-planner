@@ -11,10 +11,13 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel, Field, field_validator
@@ -32,6 +35,7 @@ from .report import build_pdf
 from .seed import seed, seed_users, seed_metadata, reset_to_synthetic
 
 STATIC_DIR = Path(__file__).parent / "static"
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +61,18 @@ def plan_dict(p: Optional[Plan]):
 
 
 def latest_plan(db: Session) -> Optional[Plan]:
+    """Return the most recent plan regardless of status (used internally)."""
     return db.query(Plan).order_by(Plan.id.desc()).first()
+
+
+def latest_active_plan(db: Session) -> Optional[Plan]:
+    """Return latest approved or proposed plan (skips rejected ones for display)."""
+    return (
+        db.query(Plan)
+        .filter(Plan.status.in_(["approved", "proposed"]))
+        .order_by(Plan.id.desc())
+        .first()
+    )
 
 
 def all_trains(db: Session):
@@ -207,6 +222,13 @@ class DecisionBody(BaseModel):
 class FaultBody(BaseModel):
     description: str = Field(min_length=3, max_length=120)
     severity: str = "low"
+
+    @field_validator("severity")
+    @classmethod
+    def validate_severity(cls, v):
+        if v not in ("high", "low"):
+            raise ValueError("severity must be 'high' or 'low'")
+        return v
 
 
 class TrainCreateBody(BaseModel):
@@ -359,6 +381,10 @@ class ScheduleRunBody(BaseModel):
     save: bool = True
 
 
+class CloseDayBody(BaseModel):
+    km_accrued: Optional[Dict[str, float]] = None  # {"NMR-01": 169.3, ...} optional override
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -376,7 +402,9 @@ def health():
 
 
 @api.post("/login")
-def login(body: LoginBody, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, body: LoginBody, db: Session = Depends(get_db)):
+    """Authenticate with username + password. Returns a bearer token valid for 12 hours."""
     user = db.query(User).filter(User.username == body.username.strip().lower()).first()
     if not user or not check_password(body.password, user.password_hash):
         raise HTTPException(401, "Wrong username or password.")
@@ -386,6 +414,12 @@ def login(body: LoginBody, db: Session = Depends(get_db)):
 @api.get("/me")
 def me(user: User = Depends(current_user)):
     return {"name": user.name, "role": user.role}
+
+
+@api.post("/refresh")
+def refresh_token(user: User = Depends(current_user)):
+    """Issue a fresh token. Call before expiry so officers aren't kicked mid-shift."""
+    return {"token": make_token(user), "user": {"name": user.name, "role": user.role}}
 
 
 @api.get("/strategies")
@@ -608,9 +642,10 @@ def delete_train(code: str, user: User = Depends(officer_only), db: Session = De
 
 @api.post("/trains/{code}/faults")
 def report_fault(code: str, body: FaultBody, user: User = Depends(officer_only), db: Session = Depends(get_db)):
+    """Report a new fault on a train. Severity 'high' blocks the train from service."""
     t = db.query(Train).filter(Train.code == code.upper()).first()
-    if not t or body.severity not in ("high", "low"):
-        raise HTTPException(400, "Invalid train or severity.")
+    if not t:
+        raise HTTPException(404, "Train not found.")
     card = JobCard(train_id=t.id, description=body.description.strip(), severity=body.severity)
     db.add(card)
     db.flush()
@@ -1014,13 +1049,14 @@ def reset_synthetic_endpoint(user: User = Depends(officer_only), db: Session = D
 # ===========================================================================
 @api.get("/plan")
 def get_plan(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    return plan_dict(latest_plan(db))
+    """Return the latest approved or proposed plan (skips rejected plans)."""
+    return plan_dict(latest_active_plan(db))
 
 
 @api.post("/plan/preview")
 def preview_plan(body: PlanBody, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """What-If: shows what would change, saves nothing."""
-    current = plan_dict(latest_plan(db))
+    current = plan_dict(latest_active_plan(db))
     result = make_plan(db, body.strategy, body.changes, user.name, save=False)
     return {**result, "changes": optimizer.diff(current["entries"], result["entries"]) if current else []}
 
@@ -1080,14 +1116,20 @@ def report(user: User = Depends(current_user), db: Session = Depends(get_db)):
 
 @api.get("/audit")
 def audit_events(limit: int = 100, offset: int = 0, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Return paginated audit events. Supports limit (max 250) and offset."""
     limit = min(max(limit, 1), 250)
     offset = max(offset, 0)
-    rows = db.query(AuditEvent).order_by(AuditEvent.id.desc()).offset(offset).limit(limit).all()
-    return [{
-        "id": row.id, "occurred_at": row.occurred_at, "actor": row.actor,
-        "action": row.action, "entity": row.entity, "entity_id": row.entity_id,
-        "details": json.loads(row.details or "{}")
-    } for row in rows]
+    query = db.query(AuditEvent).order_by(AuditEvent.id.desc())
+    total = query.count()
+    rows = query.offset(offset).limit(limit).all()
+    return {
+        "total": total,
+        "events": [{
+            "id": row.id, "occurred_at": row.occurred_at, "actor": row.actor,
+            "action": row.action, "entity": row.entity, "entity_id": row.entity_id,
+            "details": json.loads(row.details or "{}")
+        } for row in rows]
+    }
 
 
 # ---------------------------------------------------------------------------

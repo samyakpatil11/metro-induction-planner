@@ -81,10 +81,13 @@ def score_train(t: Train):
 
 
 def score_fleet(db):
-    """Score every train and save the result. Call after any fault report changes."""
+    """Score every train and update risk columns.
+
+    Does NOT commit — callers must call db.commit() themselves so that
+    risk updates and business changes land in the same atomic transaction.
+    """
     if _model["source"] == "uninitialized":
         train_model(db)
     for t in db.query(Train).all():
         t.risk, reasons = score_train(t)
         t.risk_factors = json.dumps(reasons)
-    db.commit()
