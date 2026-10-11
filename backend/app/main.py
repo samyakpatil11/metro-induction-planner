@@ -438,6 +438,7 @@ def overview(user: User = Depends(current_user), db: Session = Depends(get_db)):
         "fleet_size": db.query(Train).count(),
         "simulation_mode": C.SIMULATION_MODE,
         "risk_model_mode": risk.model_mode(),
+        "risk_model_metrics": risk.model_metrics(),
     }
 
 

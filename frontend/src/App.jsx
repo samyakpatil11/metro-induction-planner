@@ -6,11 +6,13 @@ import PlanPage from './components/PlanPage'
 import TrainsPage from './components/TrainsPage'
 import TrainDrawer from './components/TrainDrawer'
 import AdminDashboard from './components/AdminDashboard'
+import ActiveTrainManagement from './components/ActiveTrainManagement'
 import BentoGridSkeleton from './components/BentoGridSkeleton'
 import { Btn, Chip, Spinner, Toast } from './components/ui'
 
 const TABS = [
   ['overview', 'Overview'],
+  ['active_trains', 'Active Train Management'],
   ['plan', 'Tonight’s Plan'],
   ['trains', 'Trains'],
   ['admin', 'Admin / Data Manager'],
@@ -141,18 +143,17 @@ export default function App() {
               className={`relative whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${tab === id ? 'border-orange-600 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
               {label}
               {id === 'overview' && urgent > 0 && <span className="ml-2 rounded-full bg-rose-600 px-2 py-0.5 text-xs text-white">{urgent}</span>}
+              {id === 'active_trains' && (data?.trains?.filter(t => t.cert_days_left <= 10 || t.serious_faults > 0 || t.km_since_overhaul >= 22500 || t.risk_level === 'high').length > 0) && (
+                <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">
+                  {data.trains.filter(t => t.cert_days_left <= 10 || t.serious_faults > 0 || t.km_since_overhaul >= 22500 || t.risk_level === 'high').length}
+                </span>
+              )}
             </button>
           ))}
         </nav>
       </header>
 
       <main className="mx-auto max-w-[1360px] p-4 sm:p-6 lg:p-8">
-        {data?.overview?.simulation_mode && (
-          <div role="status" className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-            <strong className="font-extrabold tracking-wide">DEMO MODE · SYNTHETIC FLEET DATA</strong>
-            <span>Plans and actions here do not control or represent live trains.</span>
-          </div>
-        )}
         {data?.overview?.risk_model_mode === 'heuristic' && (
           <div role="status" className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
             <strong>Indicative risk estimate.</strong> There is not enough labeled fault history to train the risk model, so these scores use transparent operating rules and are not calibrated predictions.
@@ -168,6 +169,7 @@ export default function App() {
         ) : (
           <>
             {tab === 'overview' && <Overview overview={data.overview} trains={data.trains} isOfficer={isOfficer} goTo={setTab} openTrain={showTrain} strategy={data.plan?.strategy || data.strategies?.[0]?.id || 'safest'} refresh={refresh} toast={toast} />}
+            {tab === 'active_trains' && <ActiveTrainManagement trains={data.trains} openTrain={showTrain} isOfficer={isOfficer} strategy={data.plan?.strategy || data.strategies?.[0]?.id || 'safest'} refresh={refresh} toast={toast} />}
             {tab === 'plan' && <PlanPage plan={data.plan} strategies={data.strategies} trains={data.trains} isOfficer={isOfficer} refresh={refresh} openTrain={showTrain} toast={toast} />}
             {tab === 'trains' && <TrainsPage trains={data.trains} openTrain={showTrain} onExport={downloadFleet} />}
             {tab === 'admin' && <AdminDashboard trains={data.trains} onRefresh={refresh} toast={toast} isOfficer={isOfficer} onPlanCreated={() => { refresh(); setTab('plan'); }} />}

@@ -24,6 +24,7 @@ backend/data/
 # Pytest temp directories created in backend/
 backend/metro-admin-test-*/
 backend/metro-check-*/
+backend/metro-e2e-*/
 
 # One-off scripts
 ieee_review_render/

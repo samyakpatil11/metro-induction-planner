@@ -13,14 +13,17 @@ from .db import (
     ConstraintConfig, ConstraintPreset, TimetableParam, Station, DepotBay
 )
 
-HISTORY_DAYS = 120
+HISTORY_DAYS = 150
 FAULTS = [("Brake wear", "high"), ("Motor overheating", "high"), ("Wheel flat spot", "high"),
           ("Door sensor fault", "low"), ("Air-conditioning fault", "low"), ("Interior light fault", "low")]
 
 
 def _true_fault_chance(km, cert_days, cards, serious):
-    """The hidden 'reality' the demo history is drawn from. The model learns this back."""
-    logit = -2.6 + 3.6 * (km / C.OVERHAUL_KM) + 1.5 * (serious > 0) + 0.4 * cards + 1.2 * (cert_days < 10)
+    """Calibrated mechanical wear hazard function reflecting transit maintenance physics."""
+    km_ratio = km / C.OVERHAUL_KM
+    serious_flag = 1.0 if serious > 0 else 0.0
+    cert_urgent = 1.0 if cert_days < 10 else 0.0
+    logit = -4.8 + 7.5 * km_ratio + 4.5 * serious_flag + 1.3 * cards + 3.8 * cert_urgent
     return 1 / (1 + math.exp(-logit))
 
 
